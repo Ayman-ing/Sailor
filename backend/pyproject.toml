@@ -9,4 +9,5 @@ dependencies = [
     "llama-index-core>=0.14.7",
     "pydantic>=2.12.3",
     "qdrant-client>=1.15.1",
+    "uvicorn>=0.38.0",
 ]
