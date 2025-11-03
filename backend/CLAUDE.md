@@ -5,7 +5,7 @@
 **Sailor** is an AI-powered assistant for students.  
 It allows users to:
 - Upload their **course PDFs**
-- Extract and index the content using **PyMuPDF4LLM** + **LlamaIndex**
+- Extract and index the content using **PyMuPDF4LLM** + **Chonkie**
 - Store embeddings in **Qdrant**
 - Chat with a **retrieval-augmented chatbot** powered by **Groq API** (LLaMA3 or other open models)
 
@@ -69,9 +69,9 @@ sailor/
 │   │   │   │   ├── repository_interface.py
 │   │   │   │   └── value_objects.py
 │   │   │   ├── application/
-│   │   │   │   ├── upload_document_usecase.py
-│   │   │   │   ├── extract_chunks_usecase.py
-│   │   │   │   └── index_document_usecase.py
+│   │   │   │   ├── upload_document.py
+│   │   │   │   ├── extract_chunks.py
+│   │   │   │   └── index_document.py
 │   │   │   ├── infrastructure/
 │   │   │   │   ├── pdf_extractor_pymupdf.py
 │   │   │   │   ├── document_repository_pg.py
@@ -86,8 +86,8 @@ sailor/
 │   │   │   │   ├── entities.py
 │   │   │   │   ├── repository_interface.py
 │   │   │   ├── application/
-│   │   │   │   ├── query_documents_usecase.py
-│   │   │   │   └── chat_with_context_usecase.py
+│   │   │   │   ├── query_documents.py
+│   │   │   │   └── chat_with_context.py
 │   │   │   ├── infrastructure/
 │   │   │   │   ├── llm_groq_service.py
 │   │   │   │   └── retriever_qdrant.py
@@ -125,7 +125,7 @@ sailor/
 |-----------|-------------|
 | Framework | **FastAPI** |
 | Document Parsing | **PyMuPDF4LLM** |
-| RAG Engine | **LlamaIndex** (open-source only) |
+| Chunking | **Chonkie** |
 | Vector Database | **Qdrant** |
 | Relational DB | **PostgreSQL** |
 | LLM API | **Groq API** |
