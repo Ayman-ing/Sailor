@@ -36,6 +36,13 @@ class Settings(BaseSettings):
     chunk_size: int = 512
     chunk_overlap: int = 50
     
+    # Embedding batch size
+    embedding_batch_size: int = 32
+    
+    # File Storage (local for now, will migrate to MinIO later)
+    storage_type: str = "local"  # local or minio
+    local_storage_path: str = "./storage/documents"
+    
     class Config:
         env_file = ".env"
         case_sensitive = False

@@ -15,7 +15,6 @@ from app.core.qdrant_client import qdrant_manager
 def get_upload_use_case() -> UploadDocument:
     """Dependency to provide the UploadDocument use case."""
     embedding_repo = EmbeddingRepositoryQdrant(qdrant_manager)
-    # We don't pass the doc_repo since it's commented out
     return UploadDocument(embedding_repo=embedding_repo)
 # --- End of Dependency Injection ---
 

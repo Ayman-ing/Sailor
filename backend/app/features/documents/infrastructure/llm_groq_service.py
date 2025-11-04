@@ -1,5 +1,9 @@
 from groq import Groq
 from app.core.config import settings
+from app.core.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 class LLMGroqService:
     def __init__(self, client: Groq):
@@ -35,7 +39,7 @@ class LLMGroqService:
             return chat_completion.choices[0].message.content
         except Exception as e:
             # In case of API error, return the original content
-            print(f"Error summarizing table: {e}")
+            logger.error(f"Error summarizing table: {e}", exc_info=True)
             return table_content
 
     def summarize_code(self, code_content: str) -> str:
@@ -67,7 +71,7 @@ class LLMGroqService:
             return chat_completion.choices[0].message.content
         except Exception as e:
             # In case of API error, return the original content
-            print(f"Error summarizing code: {e}")
+            logger.error(f"Error summarizing code: {e}", exc_info=True)
             return code_content
 
 def get_llm_service() -> LLMGroqService:

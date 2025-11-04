@@ -37,7 +37,7 @@ class DocumentRepository(ABC):
 
 
 class EmbeddingRepository(ABC):
-    """Interface for vector embeddings storage."""
+    """Interface for vector embeddings storage with hybrid search support."""
     
     @abstractmethod
     async def create_collection(self, user_id: str, vector_size: int) -> None:
@@ -50,9 +50,24 @@ class EmbeddingRepository(ABC):
         user_id: str,
         document_id: str,
         chunks: List[DocumentChunk],
-        embeddings: List[List[float]]
+        dense_embeddings: List[List[float]],
+        sparse_embeddings: List,  # List[SparseVector] - avoiding import here
+        batch_size: Optional[int] = None
     ) -> List[str]:
-        """Store document chunks with their embeddings."""
+        """
+        Store document chunks with both dense and sparse embeddings.
+        
+        Args:
+            user_id: User identifier
+            document_id: Document identifier
+            chunks: List of document chunks
+            dense_embeddings: Dense vector embeddings
+            sparse_embeddings: Sparse vector embeddings (SPLADE)
+            batch_size: Optional batch size for processing
+            
+        Returns:
+            List of chunk IDs that were stored
+        """
         pass
     
     @abstractmethod
@@ -64,9 +79,24 @@ class EmbeddingRepository(ABC):
     async def search_similar(
         self,
         user_id: str,
-        query_embedding: List[float],
-        top_k: int,
-        document_ids: Optional[List[str]] = None
+        query_dense_embedding: List[float],
+        query_sparse_embedding: Optional[any] = None,  # Optional[SparseVector]
+        top_k: int = 5,
+        document_ids: Optional[List[str]] = None,
+        hybrid_alpha: float = 0.5
     ) -> List[dict]:
-        """Search for similar chunks."""
+        """
+        Search for similar chunks using hybrid search (dense + sparse).
+        
+        Args:
+            user_id: User identifier
+            query_dense_embedding: Dense vector embedding of the query
+            query_sparse_embedding: Sparse vector embedding (optional)
+            top_k: Number of results to return
+            document_ids: Optional list of document IDs to filter by
+            hybrid_alpha: Weight for dense vs sparse (0=sparse only, 1=dense only)
+            
+        Returns:
+            List of search results with scores and payloads
+        """
         pass

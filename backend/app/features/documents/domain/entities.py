@@ -44,6 +44,7 @@ class Document:
     file_hash: str = ""
     file_size_bytes: int = 0
     total_pages: int = 0
+    chunk_count: int = 0
     status: str = "pending"  # pending, processing, completed, failed
     metadata: Optional[DocumentMetadata] = None
     created_at: datetime = field(default_factory=current_timestamp)

@@ -2,7 +2,7 @@
 
 from app.features.documents.domain.entities import Document
 from app.features.documents.domain.value_objects import FileUpload
-from app.features.documents.domain.repository_interface import DocumentRepository, EmbeddingRepository
+from app.features.documents.domain.repository_interface import EmbeddingRepository
 from app.features.documents.application.process_document import ProcessDocument
 from app.features.documents.application.chunk_document import ChunkDocument
 from app.features.documents.application.index_document import IndexDocument
@@ -24,7 +24,7 @@ class UploadDocument:
         #self.doc_repo = doc_repo
         llm_service = get_llm_service()
         self.process = ProcessDocument()
-        self.chunk = ChunkDocument(llm_service=llm_service)
+        self.chunk = ChunkDocument(llm_service=llm_service, process_document=self.process)
         self.index = IndexDocument(embedding_repo)
 
     async def execute(self, user_id: str, file_upload: FileUpload) -> Document:
@@ -62,17 +62,18 @@ class UploadDocument:
             logger.info(f"Starting pipeline for document ID: {doc.id}")
             doc.mark_as_processing()
 
-            # Step 1: Process PDF -> MarkdownDocument
-            chonkie_doc = await self.process.execute(file_upload)
+            # Step 1: Process PDF -> MarkdownDocument (with page count and page chunks)
+            chonkie_doc, total_pages, page_chunks = await self.process.execute(file_upload)
             
             # Step 2: Chunk MarkdownDocument -> List[DocumentChunk]
-            chunks = await self.chunk.execute(chonkie_doc, doc.id)
+            # Pass page_chunks for page-level optimization
+            chunks = await self.chunk.execute(chonkie_doc, doc.id, page_chunks)
             
             # Step 3: Index chunks -> Qdrant
             indexed_count = await self.index.execute(user_id, doc.id, chunks)
             
             # --- Finalize Success ---
-            doc.mark_as_completed(total_pages=0) # PyMuPDF4LLM doesn't give page count easily
+            doc.mark_as_completed(total_pages=total_pages)
             doc.chunk_count = indexed_count
             #await self.doc_repo.save(doc)
             

@@ -58,7 +58,7 @@ class EmbeddingRepositoryQdrant(EmbeddingRepository):
         chunks: List[DocumentChunk],
         dense_embeddings: List[List[float]],
         sparse_embeddings: List[SparseVector],
-        batch_size: int = 50
+        batch_size: int = None
     ) -> List[str]:
         """
         Upserts document chunks with both dense and sparse vectors in batches.
@@ -69,11 +69,15 @@ class EmbeddingRepositoryQdrant(EmbeddingRepository):
             chunks: List of document chunks
             dense_embeddings: Dense vector embeddings
             sparse_embeddings: Sparse vector embeddings
-            batch_size: Number of points to upsert per batch (default: 50)
+            batch_size: Number of points to upsert per batch (default: from settings)
         
         Returns:
             List of chunk IDs that were stored
         """
+        # Use configurable batch size from settings if not provided
+        if batch_size is None:
+            batch_size = settings.embedding_batch_size
+            
         collection_name = generate_user_collection_name(user_id)
         client = self.qdrant.get_client()
         

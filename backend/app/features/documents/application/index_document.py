@@ -7,8 +7,7 @@ from app.features.documents.domain.repository_interface import EmbeddingReposito
 from app.shared.exceptions import EmbeddingError, VectorStoreError
 from app.core.logger import get_logger
 from app.core.config import settings
-from chonkie import SentenceTransformerEmbeddings
-from fastembed import SparseTextEmbedding
+from app.core.embedding_models import embedding_models_manager
 from qdrant_client.models import SparseVector
 
 logger = get_logger(__name__)
@@ -87,8 +86,8 @@ class IndexDocument:
         try:
             logger.info(f"Generating dense embeddings for {len(chunks)} chunks using '{self.dense_model_name}'...")
             
-            # Initialize Chonkie's embedding class
-            embedder = SentenceTransformerEmbeddings(self.dense_model_name)
+            # Get the reusable embedding model from the manager
+            embedder = embedding_models_manager.dense_model
             
             # Get the text content from each chunk
             texts_to_embed = [chunk.content for chunk in chunks]
@@ -110,8 +109,8 @@ class IndexDocument:
         try:
             logger.info(f"Generating sparse embeddings for {len(chunks)} chunks using '{self.sparse_model_name}'...")
             
-            # Initialize FastEmbed sparse model
-            sparse_model = SparseTextEmbedding(model_name=self.sparse_model_name)
+            # Get the reusable sparse model from the manager
+            sparse_model = embedding_models_manager.sparse_model
             
             # Get the text content from each chunk
             texts_to_embed = [chunk.content for chunk in chunks]
@@ -119,8 +118,8 @@ class IndexDocument:
             # Generate sparse embeddings
             sparse_embeddings = []
             
-            # FastEmbed returns a generator, process in batches
-            for embedding in sparse_model.embed(texts_to_embed, batch_size=32):
+            # FastEmbed returns a generator, process in batches with configurable batch size
+            for embedding in sparse_model.embed(texts_to_embed, batch_size=settings.embedding_batch_size):
                 # Convert to SparseVector format for Qdrant
                 indices = embedding.indices.tolist()
                 values = embedding.values.tolist()
