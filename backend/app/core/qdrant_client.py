@@ -19,7 +19,9 @@ class QdrantManager:
             url=settings.qdrant_url,
             api_key=settings.qdrant_api_key,
         )
-    
+    def get_client(self) -> QdrantClient:
+        """Get the underlying Qdrant client."""
+        return self.client
     async def create_collection(
         self, 
         collection_name: str, 
@@ -176,9 +178,9 @@ qdrant_manager = QdrantManager()
 # Helper functions to generate collection names
 def generate_user_collection_name(user_id: str) -> str:
     """Generate a collection name for all user documents."""
-    return f"user_{user_id}_documents"
+    return f"docling_user_{user_id}_documents"
 
 
 def generate_document_collection_name(user_id: str, document_id: str) -> str:
     """Generate a collection name for a specific document."""
-    return f"user_{user_id}_doc_{document_id}"
+    return f"docling_user_{user_id}_doc_{document_id}"

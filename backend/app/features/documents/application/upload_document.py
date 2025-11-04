@@ -1,10 +1,9 @@
 """Orchestrator use case for the entire document processing pipeline."""
 
+from app.features.documents.application.process_and_chunk_document import ProcessAndChunkDocument
 from app.features.documents.domain.entities import Document
 from app.features.documents.domain.value_objects import FileUpload
 from app.features.documents.domain.repository_interface import DocumentRepository, EmbeddingRepository
-from app.features.documents.application.process_document import ProcessDocument
-from app.features.documents.application.chunk_document import ChunkDocument
 from app.features.documents.application.index_document import IndexDocument
 from app.features.documents.infrastructure.llm_groq_service import get_llm_service
 from app.shared.helpers import generate_file_hash
@@ -23,8 +22,8 @@ class UploadDocument:
     ):
         #self.doc_repo = doc_repo
         llm_service = get_llm_service()
-        self.process = ProcessDocument()
-        self.chunk = ChunkDocument(llm_service=llm_service)
+        self.process_and_chunk = ProcessAndChunkDocument()
+
         self.index = IndexDocument(embedding_repo)
 
     async def execute(self, user_id: str, file_upload: FileUpload) -> Document:
@@ -62,13 +61,11 @@ class UploadDocument:
             logger.info(f"Starting pipeline for document ID: {doc.id}")
             doc.mark_as_processing()
 
-            # Step 1: Process PDF -> MarkdownDocument
-            chonkie_doc = await self.process.execute(file_upload)
-            
-            # Step 2: Chunk MarkdownDocument -> List[DocumentChunk]
-            chunks = await self.chunk.execute(chonkie_doc, doc.id)
-            
-            # Step 3: Index chunks -> Qdrant
+            # Step 1: Process PDF  and chunk it with docling 
+
+            chunks = await self.process_and_chunk.execute(file_upload, doc.id)
+
+            # Step 2: Index chunks -> Qdrant
             indexed_count = await self.index.execute(user_id, doc.id, chunks)
             
             # --- Finalize Success ---

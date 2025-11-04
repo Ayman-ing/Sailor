@@ -1,7 +1,10 @@
 """Repository interfaces for the documents feature."""
 
 from abc import ABC, abstractmethod
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from qdrant_client.http.models import SparseVector
 
 from app.features.documents.domain.entities import Document, DocumentChunk
 from app.features.documents.domain.value_objects import DocumentFilter
@@ -50,9 +53,10 @@ class EmbeddingRepository(ABC):
         user_id: str,
         document_id: str,
         chunks: List[DocumentChunk],
-        embeddings: List[List[float]]
+        dense_embeddings: List[List[float]],
+        sparse_embeddings: List["SparseVector"]
     ) -> List[str]:
-        """Store document chunks with their embeddings."""
+        """Store document chunks with their dense and sparse embeddings."""
         pass
     
     @abstractmethod

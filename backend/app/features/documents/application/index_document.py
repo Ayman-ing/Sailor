@@ -1,32 +1,33 @@
 """Use case for generating embeddings and indexing document chunks in a vector store."""
 
-from typing import List
+from typing import List, Tuple
+import markdown
+from bs4 import BeautifulSoup
 
 from app.features.documents.domain.entities import DocumentChunk
 from app.features.documents.domain.repository_interface import EmbeddingRepository
 from app.shared.exceptions import EmbeddingError, VectorStoreError
 from app.core.logger import get_logger
 from app.core.config import settings
-from chonkie import SentenceTransformerEmbeddings
+from app.core.model_manager import get_model_manager
+from qdrant_client.http.models import SparseVector
 
 logger = get_logger(__name__)
 
 
 class IndexDocument:
     """
-    Generates embeddings for document chunks and stores them in the vector database
-    via the EmbeddingRepository.
+    Generates dense and sparse embeddings for document chunks and stores them.
+    Uses preloaded models from the model manager.
     """
     
     def __init__(self, embedding_repo: EmbeddingRepository):
-        """
-        Initializes the use case with a repository for storing embeddings.
-        
-        Args:
-            embedding_repo: An implementation of the EmbeddingRepository interface.
-        """
         self.embedding_repo = embedding_repo
-        self.embedding_model_name = settings.embedding_model
+        self.dense_model_name = settings.embedding_model
+        # Get the preloaded models from the model manager
+        self.model_manager = get_model_manager()
+        self.dense_embedder = self.model_manager.dense_embedder
+        self.sparse_embedder = self.model_manager.sparse_embedder
     
     async def execute(
         self, 
@@ -34,17 +35,6 @@ class IndexDocument:
         document_id: str, 
         chunks: List[DocumentChunk]
     ) -> int:
-        """
-        Generates embeddings for a list of chunks and stores them.
-        
-        Args:
-            user_id: The ID of the user who owns the document.
-            document_id: The ID of the document the chunks belong to.
-            chunks: The list of DocumentChunk objects to be indexed.
-            
-        Returns:
-            The number of chunks that were successfully indexed.
-        """
         if not chunks:
             logger.warning(f"No chunks provided for indexing document {document_id}. Skipping.")
             return 0
@@ -52,48 +42,45 @@ class IndexDocument:
         try:
             logger.info(f"Starting indexing for {len(chunks)} chunks from document {document_id}")
             
-            # 1. Generate embeddings for all chunks in a batch
-            embeddings = await self._generate_embeddings(chunks)
+            # 1. Generate both dense and sparse embeddings
+            dense_embeddings, sparse_embeddings = await self._generate_embeddings(chunks)
             
-            # 2. Store the chunks and their embeddings in the vector store
+            # 2. Store the chunks and both sets of embeddings
             indexed_ids = await self.embedding_repo.store_chunks(
                 user_id=user_id,
                 document_id=document_id,
                 chunks=chunks,
-                embeddings=embeddings
+                dense_embeddings=dense_embeddings,
+                sparse_embeddings=sparse_embeddings
             )
             
             logger.info(f"Successfully indexed {len(indexed_ids)} chunks in vector store.")
             return len(indexed_ids)
             
         except (EmbeddingError, VectorStoreError) as e:
-            # These are expected errors, re-raise them
             logger.error(f"A known error occurred during indexing: {e}")
             raise
         except Exception as e:
-            # Catch any other unexpected errors
-            logger.error(f"An unexpected error occurred while indexing document {document_id}: {e}")
+            logger.error(f"An unexpected error occurred while indexing document {document_id}: {e}", exc_info=True)
             raise VectorStoreError(f"An unexpected error occurred during indexing: {str(e)}")
 
-    async def _generate_embeddings(self, chunks: List[DocumentChunk]) -> List[List[float]]:
-        """Generates embeddings for a list of chunks using Chonkie's embedding wrapper."""
+
+    async def _generate_embeddings(self, chunks: List[DocumentChunk]) -> Tuple[List[List[float]], List[SparseVector]]:
+        """Generates both dense and sparse embeddings for a list of chunks."""
         try:
+            logger.info(f"Cleaning text for {len(chunks)} chunks...")
             
-            logger.info(f"Generating embeddings for {len(chunks)} chunks using model '{self.embedding_model_name}'...")
+            # --- Generate Dense Embeddings ---
+            logger.info(f"Generating dense embeddings using model '{self.dense_model_name}'...")
+            dense_vectors = self.dense_embedder.embed_batch([chunk.content for chunk in chunks]).tolist()
             
-            # Initialize Chonkie's embedding class
-            embedder = SentenceTransformerEmbeddings(self.embedding_model_name)
-            
-            # Get the text content from each chunk
-            texts_to_embed = [chunk.content for chunk in chunks]
-            
-            # Generate embeddings in a single batch call
-            embedding_vectors = embedder.embed_batch(texts_to_embed)
-            
-            # Convert numpy array to a list of lists
-            return embedding_vectors.tolist() if hasattr(embedding_vectors, 'tolist') else list(embedding_vectors)
+            # --- Generate Sparse Embeddings ---
+            logger.info("Generating sparse embeddings using SPLADE model...")
+            sparse_vectors = self.sparse_embedder.generate_sparse_vectors([chunk.content for chunk in chunks])
+
+            logger.info("Successfully generated dense and sparse embeddings.")
+            return dense_vectors, sparse_vectors
             
         except Exception as e:
-            logger.error(f"Failed to generate embeddings with Chonkie: {e}")
-            # Wrap the specific error in our domain exception
+            logger.error(f"Failed to generate embeddings: {e}", exc_info=True)
             raise EmbeddingError(f"Embedding generation failed: {str(e)}")

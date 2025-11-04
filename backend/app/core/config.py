@@ -30,8 +30,12 @@ class Settings(BaseSettings):
     
     # LlamaIndex
     embedding_model: str = "all-MiniLM-L6-v2"
+    embedding_dim: int = 384
     chunk_size: int = 512
     chunk_overlap: int = 50
+    
+    # Docling Service (optional - use remote service instead of local processing)
+    docling_service_url: Optional[str] = None  # e.g., "http://powerful-machine:8001"
     
     class Config:
         env_file = ".env"
