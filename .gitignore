@@ -8,5 +8,6 @@ wheels/
 
 # Virtual environments
 .venv
-
+output_markdown/
 .env
+pdf_sample
