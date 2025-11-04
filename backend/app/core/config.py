@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     
     # LlamaIndex
     embedding_model: str = "all-MiniLM-L6-v2"
+    embedding_dim: int = 384
+    sparse_embedding_model: str = "prithvida/Splade_PP_en_v1"  # NEW
+
     chunk_size: int = 512
     chunk_overlap: int = 50
     

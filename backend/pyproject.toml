@@ -9,6 +9,7 @@ dependencies = [
     "asyncpg>=0.30.0",
     "chonkie>=1.4.0",
     "fastapi>=0.121.0",
+    "fastembed>=0.7.3",
     "groq>=0.33.0",
     "llama-index-core>=0.14.7",
     "pydantic>=2.12.3",
