@@ -1,10 +1,10 @@
 """Use case for chunking different content types using Chonkie's specialized chunkers."""
 
-from typing import List, Optional
+from typing import List
 
 # Import the types from Chonkie for clear type hinting
 from chonkie import MarkdownDocument
-from chonkie import RecursiveChunker, CodeChunker,TableChunker
+from chonkie import RecursiveChunker, CodeChunker, TableChunker
 
 from app.features.documents.domain.entities import DocumentChunk
 from app.features.documents.domain.value_objects import ChunkingConfig

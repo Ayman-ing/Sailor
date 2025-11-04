@@ -49,7 +49,21 @@ class EmbeddingRepositoryQdrant(EmbeddingRepository):
                     "text-sparse": models.SparseVectorParams()
                 }
             )
-            logger.info(f"Collection '{collection_name}' created successfully with hybrid vectors.")
+            
+            # Create payload indexes for filtering
+            logger.info(f"Creating payload indexes for collection '{collection_name}'...")
+            client.create_payload_index(
+                collection_name=collection_name,
+                field_name="document_id",
+                field_schema=models.PayloadSchemaType.KEYWORD
+            )
+            client.create_payload_index(
+                collection_name=collection_name,
+                field_name="chunk_index",
+                field_schema=models.PayloadSchemaType.INTEGER
+            )
+            
+            logger.info(f"Collection '{collection_name}' created successfully with hybrid vectors and indexes.")
 
     async def store_chunks(
         self,

@@ -54,7 +54,7 @@ class FileUpload:
 class ChunkingConfig:
     """Configuration for document chunking."""
     
-    chunk_size: int = 512
+    chunk_size: int = 1024
     chunk_overlap: int = 50
     
     def __post_init__(self):
