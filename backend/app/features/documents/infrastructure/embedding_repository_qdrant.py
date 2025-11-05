@@ -62,6 +62,11 @@ class EmbeddingRepositoryQdrant(EmbeddingRepository):
                 field_name="chunk_index",
                 field_schema=models.PayloadSchemaType.INTEGER
             )
+            client.create_payload_index(
+                collection_name=collection_name,
+                field_name="page_number",
+                field_schema=models.PayloadSchemaType.INTEGER
+            )
             
             logger.info(f"Collection '{collection_name}' created successfully with hybrid vectors and indexes.")
 
@@ -133,6 +138,7 @@ class EmbeddingRepositoryQdrant(EmbeddingRepository):
                         "document_id": chunk.document_id,
                         "content": chunk.content,
                         "chunk_index": chunk.chunk_index,
+                        "page_number": chunk.page_number,  # ✅ Top-level field for indexing
                         "token_count": chunk.token_count,
                         "metadata": chunk.metadata,
                     }

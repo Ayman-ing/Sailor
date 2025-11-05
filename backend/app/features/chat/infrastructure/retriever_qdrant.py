@@ -190,7 +190,7 @@ class RetrieverQdrant(RetrieverRepository):
                 content=payload.get('content', ''),
                 score=float(result.get('score', 0.0)),
                 chunk_index=payload.get('chunk_index', 0),
-                page_number=payload.get('metadata', {}).get('page_number', 0),
+                page_number=payload.get('page_number', 0),  # ✅ Now from top-level field
                 token_count=payload.get('token_count', 0),
                 metadata=payload.get('metadata', {})
             )

@@ -15,7 +15,6 @@ class DocumentModel(Base):
     filename = Column(String, nullable=False)
     file_hash = Column(String, nullable=False, index=True)
     file_size_bytes = Column(Integer, nullable=False)
-    storage_path = Column(String, nullable=True)  # Path where file is stored
     total_pages = Column(Integer, default=0)
     status = Column(String, default="pending", index=True)
     

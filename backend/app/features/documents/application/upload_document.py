@@ -24,7 +24,7 @@ class UploadDocument:
         #self.doc_repo = doc_repo
         llm_service = get_llm_service()
         self.process = ProcessDocument()
-        self.chunk = ChunkDocument(llm_service=llm_service, process_document=self.process)
+        self.chunk = ChunkDocument(llm_service=llm_service)
         self.index = IndexDocument(embedding_repo)
 
     async def execute(self, user_id: str, file_upload: FileUpload) -> Document:
@@ -62,12 +62,11 @@ class UploadDocument:
             logger.info(f"Starting pipeline for document ID: {doc.id}")
             doc.mark_as_processing()
 
-            # Step 1: Process PDF -> MarkdownDocument (with page count and page chunks)
-            chonkie_doc, total_pages, page_chunks = await self.process.execute(file_upload)
+            # Step 1: Process PDF -> List of (MarkdownDocument, page_number) per page
+            page_documents, total_pages, page_chunks = await self.process.execute(file_upload)
             
-            # Step 2: Chunk MarkdownDocument -> List[DocumentChunk]
-            # Pass page_chunks for page-level optimization
-            chunks = await self.chunk.execute(chonkie_doc, doc.id, page_chunks)
+            # Step 2: Chunk all pages -> List[DocumentChunk] with accurate page numbers
+            chunks = await self.chunk.execute(page_documents, doc.id)
             
             # Step 3: Index chunks -> Qdrant
             indexed_count = await self.index.execute(user_id, doc.id, chunks)

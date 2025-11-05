@@ -3,7 +3,7 @@ Chonkie MarkdownDocument."""
 
 import tempfile
 import os
-from typing import Tuple, Dict, List
+from typing import Tuple, List
 
 # Import the return type for type hinting
 from chonkie import MarkdownDocument
@@ -18,42 +18,50 @@ logger = get_logger(__name__)
 
 class ProcessDocument:
     """
-    Extracts markdown from a PDF and processes it using Chonkie's MarkdownChef,
-    returning a structured MarkdownDocument object with page number metadata.
+    Extracts markdown from a PDF and processes it using Chonkie's MarkdownChef.
+    Each page is processed separately to maintain accurate page number tracking.
     """
     
     def __init__(self, tokenizer: str = "gpt2"):
         self.tokenizer = tokenizer
-        self.page_map: Dict[str, int] = {}  # Maps content to page numbers
     
-    async def execute(self, file_upload: FileUpload) -> Tuple[MarkdownDocument, int, List[Tuple[int, str]]]:
+    async def execute(self, file_upload: FileUpload) -> Tuple[List[Tuple[MarkdownDocument, int]], int, List[Tuple[int, str]]]:
         """
-        Processes an uploaded PDF into a Chonkie MarkdownDocument with page tracking.
+        Processes an uploaded PDF into Chonkie MarkdownDocuments with page tracking.
+        Each page is processed separately to maintain accurate page numbers.
         
         Args:
             file_upload: The uploaded file value object.
             
         Returns:
-            A tuple of (MarkdownDocument, total_pages, page_chunks)
-            page_chunks: List of (page_number, content) for direct page-level chunking
+            A tuple of (page_documents, total_pages, page_chunks)
+            page_documents: List of (MarkdownDocument, page_number) tuples
+            total_pages: Total number of pages
+            page_chunks: List of (page_number, content) for reference
         """
-        logger.info(f"Starting full processing for {file_upload.filename}")
+        logger.info(f"Starting page-by-page processing for {file_upload.filename}")
         
         # Extract markdown with page information
         markdown_content, total_pages, page_chunks = await self._extract_with_pages(file_upload)
         
-        # Process with MarkdownChef
-        chonkie_doc = await self._process_with_chef(markdown_content)
+        # Process each page separately with MarkdownChef
+        page_documents = []
+        for page_num, page_content in page_chunks:
+            if page_content.strip():
+                chonkie_page_doc = await self._process_with_chef(page_content)
+                page_documents.append((chonkie_page_doc, page_num))
+                logger.debug(f"Processed page {page_num}: {len(chonkie_page_doc.chunks)} chunks")
         
-        # Store page mapping for later use
-        self.page_map = self._build_page_map(page_chunks)
+        total_chunks = sum(len(doc.chunks) for doc, _ in page_documents)
+        total_code = sum(len(doc.code) for doc, _ in page_documents)
+        total_tables = sum(len(doc.tables) for doc, _ in page_documents)
         
         logger.info(
-            f"MarkdownChef processed: {len(chonkie_doc.chunks)} text chunks, "
-            f"{len(chonkie_doc.code)} code blocks, {len(chonkie_doc.tables)} tables from {total_pages} pages."
+            f"MarkdownChef processed {len(page_documents)} pages: "
+            f"{total_chunks} text chunks, {total_code} code blocks, {total_tables} tables"
         )
         
-        return chonkie_doc, total_pages, page_chunks
+        return page_documents, total_pages, page_chunks
     
     async def _extract_with_pages(self, file_upload: FileUpload) -> Tuple[str, int, List[Tuple[int, str]]]:
         """
@@ -114,59 +122,6 @@ class ProcessDocument:
                 document_id="unknown",
                 reason=f"PDF to markdown extraction failed: {str(e)}"
             )
-    
-    def _build_page_map(self, page_chunks: List[Tuple[int, str]]) -> Dict[str, int]:
-        """
-        Build a mapping of content snippets to page numbers.
-        This helps associate chunks with their source pages.
-        """
-        page_map = {}
-        for page_num, content in page_chunks:
-            # Store first 100 chars of each page as key
-            key = content[:100].strip()
-            page_map[key] = page_num
-        
-        logger.info(f"Built page map with {len(page_map)} pages")
-        if page_chunks:
-            logger.debug(f"First page starts with: {page_chunks[0][1][:50]}...")
-            logger.debug(f"Last page (#{page_chunks[-1][0]}) starts with: {page_chunks[-1][1][:50]}...")
-        
-        return page_map
-    
-    def get_page_number_for_content(self, content: str) -> int:
-        """
-        Try to determine the page number for a given content chunk.
-        
-        Returns:
-            Page number (1-based) or 0 if unknown
-        """
-        if not content or not self.page_map:
-            return 0
-            
-        content_start = content[:100].strip()
-        
-        # Try exact match first
-        if content_start in self.page_map:
-            logger.debug(f"Exact match found for chunk starting with: {content_start[:50]}...")
-            return self.page_map[content_start]
-        
-        # Try fuzzy match (find best overlap)
-        best_match_page = 0
-        best_match_length = 0
-        
-        for key, page_num in self.page_map.items():
-            if key in content or content_start in key:
-                match_length = len(set(key.split()) & set(content_start.split()))
-                if match_length > best_match_length:
-                    best_match_length = match_length
-                    best_match_page = page_num
-        
-        if best_match_page > 0:
-            logger.debug(f"Fuzzy match found (score={best_match_length}) for chunk -> page {best_match_page}")
-        else:
-            logger.debug(f"No page match found for chunk starting with: {content_start[:50]}...")
-        
-        return best_match_page
     
     async def _process_with_chef(self, markdown_content: str) -> MarkdownDocument:
         """Process markdown content with MarkdownChef."""
