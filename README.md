@@ -16,9 +16,11 @@
 
 ## ✨ Features
 
-- **Document Processing**: Upload and parse PDFs using PyMuPDF4LLM
+- **Document Processing**: Upload and parse PDFs using PyMuPDF4LLM and Chonkie
 - **Smart Indexing**: Vector embeddings stored in Qdrant for fast retrieval
-- **RAG Pipeline**: Retrieval-Augmented Generation with LlamaIndex
+- **Hybrid Search**: Dense + sparse embeddings with RRF fusion
+- **Context Expansion**: Automatic retrieval of neighboring chunks for better context
+- **RAG Pipeline**: Retrieval-Augmented Generation powered by Groq LLM
 - **Fast Inference**: Powered by Groq API (LLaMA3 models)
 - **Clean Architecture**: Feature-based modular design
 - **Type Safety**: Full Pydantic validation throughout
@@ -51,8 +53,9 @@ See [`backend/CLAUDE.md`](backend/CLAUDE.md) for detailed architecture documenta
 | Category | Technology |
 |----------|------------|
 | Framework | FastAPI |
-| Document Parsing | PyMuPDF4LLM |
-| RAG Engine | LlamaIndex |
+| Document Parsing | PyMuPDF4LLM, Docling |
+| Chunking | Chonkie (MarkdownChef) |
+| Embeddings | SentenceTransformers (dense), SPLADE (sparse) |
 | Vector DB | Qdrant |
 | Relational DB | PostgreSQL |
 | LLM API | Groq (LLaMA3) |
@@ -193,9 +196,10 @@ backend/
 ## 🛣️ Roadmap
 
 - [x] Project structure and architecture
-- [ ] Document upload and processing
-- [ ] Vector embedding and storage
-- [ ] RAG-powered chat interface
+- [x] Document upload and processing
+- [x] Vector embedding and storage (hybrid search)
+- [x] RAG-powered chat interface
+- [x] Context expansion for better answers
 - [ ] User authentication
 - [ ] Document management (list, delete)
 - [ ] Chat history
@@ -221,8 +225,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🙏 Acknowledgments
 
 - [FastAPI](https://fastapi.tiangolo.com/) - Modern web framework
-- [LlamaIndex](https://www.llamaindex.ai/) - RAG framework
+- [Chonkie](https://github.com/bhavnicksm/chonkie) - Intelligent text chunking
+- [PyMuPDF4LLM](https://github.com/pymupdf/PyMuPDF4LLM) - PDF to markdown conversion
+- [Docling](https://github.com/DS4SD/docling) - Document understanding and parsing
 - [Qdrant](https://qdrant.tech/) - Vector database
+- [SentenceTransformers](https://www.sbert.net/) - Dense embeddings
+- [SPLADE](https://github.com/naver/splade) - Sparse embeddings
 - [Groq](https://groq.com/) - Fast LLM inference
 
 ## 📧 Contact

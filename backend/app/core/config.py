@@ -39,9 +39,9 @@ class Settings(BaseSettings):
     # Embedding batch size
     embedding_batch_size: int = 32
     
-    # File Storage (local for now, will migrate to MinIO later)
-    storage_type: str = "local"  # local or minio
-    local_storage_path: str = "./storage/documents"
+    # Output directories
+    output_dir: str = "output"
+    markdown_output_dir: str = "output/markdown"
     
     class Config:
         env_file = ".env"
