@@ -39,10 +39,6 @@ class Settings(BaseSettings):
     # Embedding batch size
     embedding_batch_size: int = 32
     
-    # Output directories
-    output_dir: str = "output"
-    markdown_output_dir: str = "output/markdown"
-    
     class Config:
         env_file = ".env"
         case_sensitive = False

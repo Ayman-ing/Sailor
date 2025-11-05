@@ -4,8 +4,6 @@ Chonkie MarkdownDocument."""
 import tempfile
 import os
 from typing import Tuple, Dict, List
-from pathlib import Path
-from datetime import datetime
 
 # Import the return type for type hinting
 from chonkie import MarkdownDocument
@@ -14,7 +12,6 @@ import pymupdf4llm
 from app.features.documents.domain.value_objects import FileUpload
 from app.shared.exceptions import DocumentProcessingError
 from app.core.logger import get_logger
-from app.core.config import settings
 
 logger = get_logger(__name__)
 
@@ -28,11 +25,6 @@ class ProcessDocument:
     def __init__(self, tokenizer: str = "gpt2"):
         self.tokenizer = tokenizer
         self.page_map: Dict[str, int] = {}  # Maps content to page numbers
-        self._ensure_output_dirs()
-    
-    def _ensure_output_dirs(self):
-        """Ensure output directories exist."""
-        Path(settings.markdown_output_dir).mkdir(parents=True, exist_ok=True)
     
     async def execute(self, file_upload: FileUpload) -> Tuple[MarkdownDocument, int, List[Tuple[int, str]]]:
         """
@@ -50,11 +42,8 @@ class ProcessDocument:
         # Extract markdown with page information
         markdown_content, total_pages, page_chunks = await self._extract_with_pages(file_upload)
         
-        # Save pymupdf4llm output
-        self._save_pymupdf_output(file_upload.filename, markdown_content)
-        
         # Process with MarkdownChef
-        chonkie_doc = await self._process_with_chef(markdown_content, file_upload.filename)
+        chonkie_doc = await self._process_with_chef(markdown_content)
         
         # Store page mapping for later use
         self.page_map = self._build_page_map(page_chunks)
@@ -179,28 +168,7 @@ class ProcessDocument:
         
         return best_match_page
     
-    def _save_pymupdf_output(self, filename: str, markdown_content: str):
-        """Save the pymupdf4llm markdown output to file."""
-        try:
-            # Create filename with timestamp
-            base_name = Path(filename).stem
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_filename = f"{base_name}_{timestamp}_pymupdf4llm.md"
-            output_path = Path(settings.markdown_output_dir) / output_filename
-            
-            # Save the markdown content
-            with open(output_path, 'w', encoding='utf-8') as f:
-                f.write("# pymupdf4llm Output\n")
-                f.write(f"Source: {filename}\n")
-                f.write(f"Generated: {timestamp}\n\n")
-                f.write("---\n\n")
-                f.write(markdown_content)
-            
-            logger.info(f"Saved pymupdf4llm output to: {output_path}")
-        except Exception as e:
-            logger.warning(f"Failed to save pymupdf4llm output: {e}")
-    
-    async def _process_with_chef(self, markdown_content: str, filename: str = "unknown") -> MarkdownDocument:
+    async def _process_with_chef(self, markdown_content: str) -> MarkdownDocument:
         """Process markdown content with MarkdownChef."""
         chef = MarkdownChef(tokenizer=self.tokenizer)
         
@@ -216,9 +184,6 @@ class ProcessDocument:
             # Process the file with the chef
             chonkie_doc = chef.process(tmp_path)
             
-            # Save Chonkie's processed output
-            self._save_chonkie_output(filename, chonkie_doc)
-            
             return chonkie_doc
             
         except Exception as e:
@@ -231,48 +196,3 @@ class ProcessDocument:
             # Clean up the temporary file
             if tmp_path and os.path.exists(tmp_path):
                 os.unlink(tmp_path)
-    
-    def _save_chonkie_output(self, filename: str, chonkie_doc: MarkdownDocument):
-        """Save the Chonkie MarkdownChef output to file."""
-        try:
-            # Create filename with timestamp
-            base_name = Path(filename).stem
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_filename = f"{base_name}_{timestamp}_chonkie.md"
-            output_path = Path(settings.markdown_output_dir) / output_filename
-            
-            # Save the processed chunks
-            with open(output_path, 'w', encoding='utf-8') as f:
-                f.write("# Chonkie MarkdownChef Output\n")
-                f.write(f"Source: {filename}\n")
-                f.write(f"Generated: {timestamp}\n")
-                f.write(f"Total Chunks: {len(chonkie_doc.chunks)}\n")
-                f.write(f"Code Blocks: {len(chonkie_doc.code)}\n")
-                f.write(f"Tables: {len(chonkie_doc.tables)}\n\n")
-                f.write("---\n\n")
-                
-                # Write text chunks
-                f.write("## Text Chunks\n\n")
-                for i, chunk in enumerate(chonkie_doc.chunks, 1):
-                    f.write(f"### Chunk {i}\n")
-                    f.write(f"**Tokens:** {chunk.token_count}\n\n")
-                    f.write(f"{chunk.text}\n\n")
-                    f.write("---\n\n")
-                
-                # Write code blocks if any
-                if chonkie_doc.code:
-                    f.write("## Code Blocks\n\n")
-                    for i, code_block in enumerate(chonkie_doc.code, 1):
-                        f.write(f"### Code Block {i}\n")
-                        f.write(f"```\n{code_block}\n```\n\n")
-                
-                # Write tables if any
-                if chonkie_doc.tables:
-                    f.write("## Tables\n\n")
-                    for i, table in enumerate(chonkie_doc.tables, 1):
-                        f.write(f"### Table {i}\n")
-                        f.write(f"{table}\n\n")
-            
-            logger.info(f"Saved Chonkie output to: {output_path}")
-        except Exception as e:
-            logger.warning(f"Failed to save Chonkie output: {e}")
