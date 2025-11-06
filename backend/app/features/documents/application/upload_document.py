@@ -1,87 +1,130 @@
-"""Orchestrator use case for the entire document processing pipeline."""
+"""Document upload and processing pipeline orchestrator."""
+
+import asyncio
+from typing import List
+import uuid
+from datetime import datetime
 
 from app.features.documents.domain.entities import Document
 from app.features.documents.domain.value_objects import FileUpload
 from app.features.documents.domain.repository_interface import EmbeddingRepository
 from app.features.documents.application.process_document import ProcessDocument
 from app.features.documents.application.chunk_document import ChunkDocument
-from app.features.documents.application.index_document import IndexDocument
+from app.features.documents.application.embed_document import EmbedDocument
+from app.features.documents.application.upsert_document import UpsertDocument
 from app.features.documents.infrastructure.llm_groq_service import get_llm_service
-from app.shared.helpers import generate_file_hash
+from app.core.config import settings
 from app.core.logger import get_logger
 
 logger = get_logger(__name__)
 
 
 class UploadDocument:
-    """Orchestrates the document upload, processing, chunking, and indexing pipeline."""
 
-    def __init__(
-        self,
-        #doc_repo: DocumentRepository,
-        embedding_repo: EmbeddingRepository,
-    ):
-        #self.doc_repo = doc_repo
+    def __init__(self, embedding_repo: EmbeddingRepository):
         llm_service = get_llm_service()
         self.process = ProcessDocument()
         self.chunk = ChunkDocument(llm_service=llm_service)
-        self.index = IndexDocument(embedding_repo)
+        self.embed = EmbedDocument()
+        self.upsert = UpsertDocument(embedding_repo)
+    
+    async def _chunk_and_embed_batch(
+        self, 
+        page_batch: List,
+        doc_id: str,
+        semaphore: asyncio.Semaphore
+    ):
+        async with semaphore:
+            batch_start = page_batch[0][1]
+            batch_end = page_batch[-1][1]
+            
+            try:
+                all_batch_chunks = []
+                for page_tuple in page_batch:
+                    page_chunks = await self.chunk.execute([page_tuple], doc_id)
+                    all_batch_chunks.extend(page_chunks)
+                
+                if not all_batch_chunks:
+                    return ([], [], [])
+                
+                dense_emb, sparse_emb = await self.embed.execute(all_batch_chunks)
+                
+                logger.info(f"Batch {batch_start}-{batch_end}: {len(all_batch_chunks)} chunks embedded")
+                return (all_batch_chunks, dense_emb, sparse_emb)
+                
+            except Exception as e:
+                logger.error(f"Batch {batch_start}-{batch_end} FAILED - {len(page_batch)} pages SKIPPED: {e}")
+                return ([], [], [])
 
     async def execute(self, user_id: str, file_upload: FileUpload) -> Document:
-        """
-        Executes the full document processing pipeline.
-        
-        1. Checks for duplicates.
-        2. Creates a Document record in the database.
-        3. Processes, chunks, and indexes the document.
-        4. Updates the document status (completed or failed).
-        
-        Returns:
-            The final Document entity with its status.
-        """
-        file_hash = generate_file_hash(file_upload.content)
-        
-        # 1. Check for duplicates for this user
-        # existing_doc = await self.doc_repo.find_by_hash(user_id, file_hash)
-        # if existing_doc:
-        #     logger.info(f"Document '{file_upload.filename}' with hash {file_hash} already exists for user {user_id}.")
-        #     return existing_doc
-
-        # 2. Create and save the initial document record
-        doc = Document(
-            user_id=user_id,
-            filename=file_upload.filename,
-            file_hash=file_hash,
-            file_size_bytes=len(file_upload.content),
-            status="pending"
-        )
-        #await self.doc_repo.save(doc)
-        
         try:
-            # --- Start Pipeline ---
-            logger.info(f"Starting pipeline for document ID: {doc.id}")
-            doc.mark_as_processing()
-
-            # Step 1: Process PDF -> List of (MarkdownDocument, page_number) per page
-            page_documents, total_pages, page_chunks = await self.process.execute(file_upload)
+            logger.info(f"Processing {file_upload.filename}")
+            page_documents, total_pages, _ = await self.process.execute(file_upload)
             
-            # Step 2: Chunk all pages -> List[DocumentChunk] with accurate page numbers
-            chunks = await self.chunk.execute(page_documents, doc.id)
+            doc = Document(
+                id=str(uuid.uuid4()),
+                user_id=user_id,
+                filename=file_upload.filename,
+                file_hash="",
+                file_size_bytes=len(file_upload.content),
+                total_pages=total_pages,
+                chunk_count=0,
+                status="processing",
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
+            )
             
-            # Step 3: Index chunks -> Qdrant
-            indexed_count = await self.index.execute(user_id, doc.id, chunks)
+            page_batches = [
+                page_documents[i:i + settings.pages_per_batch]
+                for i in range(0, len(page_documents), settings.pages_per_batch)
+            ]
             
-            # --- Finalize Success ---
-            doc.mark_as_completed(total_pages=total_pages)
+            logger.info(f"Processing {total_pages} pages in {len(page_batches)} batches")
+            
+            semaphore = asyncio.Semaphore(settings.max_parallel_pages)
+            
+            tasks = []
+            for batch in page_batches:
+                task = self._chunk_and_embed_batch(batch, doc.id, semaphore)
+                tasks.append(task)
+            
+            all_results = await asyncio.gather(*tasks)
+            
+            all_chunks = []
+            all_dense = []
+            all_sparse = []
+            failed_batches = 0
+            
+            for chunks, dense, sparse in all_results:
+                if not chunks:
+                    failed_batches += 1
+                all_chunks.extend(chunks)
+                all_dense.extend(dense)
+                all_sparse.extend(sparse)
+            
+            if failed_batches > 0:
+                logger.warning(f"{failed_batches} batch(es) failed - some pages were skipped")
+            
+            indexed_count = 0
+            if all_chunks:
+                for idx, chunk in enumerate(all_chunks):
+                    chunk.chunk_index = idx
+                
+                indexed_count = await self.upsert.execute(
+                    user_id=user_id,
+                    document_id=doc.id,
+                    chunks=all_chunks,
+                    dense_embeddings=all_dense,
+                    sparse_embeddings=all_sparse
+                )
+            
             doc.chunk_count = indexed_count
-            #await self.doc_repo.save(doc)
+            doc.mark_as_completed(total_pages=total_pages)
             
-            logger.info(f"Pipeline completed successfully for document ID: {doc.id}")
+            logger.info(f"Completed: {indexed_count} chunks from {total_pages} pages")
             
+            return doc
+
         except Exception as e:
-            # --- Handle Failure ---
-            logger.error(f"Pipeline failed for document {doc.id}: {e}", exc_info=True)
-            doc.mark_as_failed(str(e))
-            #await self.doc_repo.save(doc)
-        
-        return doc
+            logger.error(f"Upload failed: {e}")
+            raise

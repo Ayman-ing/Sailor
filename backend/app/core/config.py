@@ -20,27 +20,37 @@ class Settings(BaseSettings):
     postgres_password: str = "postgres"
     postgres_db: str = "sailor_db"
     
-    # Qdrant
+    # Qdrant Vector Database
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: Optional[str] = None
     
-    # Groq
+    # Groq LLM
     groq_api_key: str
     groq_model: str = "llama3-70b-8192"
     
-    # LlamaIndex
-    embedding_model: str = "all-MiniLM-L6-v2"
-    embedding_dim: int = 384
-    sparse_embedding_model: str = "prithvida/Splade_PP_en_v1"  # NEW
+    # Embedding Models
+    embedding_model: str = "all-MiniLM-L6-v2"  # Dense embedding model
+    embedding_dim: int = 384  # Dense embedding dimension
+    sparse_embedding_model: str = "prithvida/Splade_PP_en_v1"  # SPLADE sparse model
+    
+    # Embedding Microservices (HTTP endpoints)
+    dense_embedding_url: str = "http://localhost:8001"
+    sparse_embedding_url: str = "http://localhost:8002"
+    embedding_max_retries: int = 3
+    embedding_retry_delay: float = 1.0
+    
+    # Performance Settings
+    embedding_request_batch_size: int = 32  # Batch size for HTTP requests to embedding services
+    max_parallel_pages: int = 6  # Concurrent page processing (6 workers for 8-core CPU)
+    pages_per_batch: int = 6  # Pages grouped per batch before parallel processing
+    embedding_batch_size: int = 32  # Internal batch size for embedding model inference
 
+    # Document Processing
     chunk_size: int = 512
     chunk_overlap: int = 50
     
-    # Embedding batch size
-    embedding_batch_size: int = 32
-    
-    # File Storage (local for now, will migrate to MinIO later)
-    storage_type: str = "local"  # local or minio
+    # File Storage
+    storage_type: str = "local"  # Options: "local" or "minio"
     local_storage_path: str = "./storage/documents"
     
     class Config:

@@ -5,7 +5,7 @@ from typing import List, Optional
 from app.features.chat.domain.entities import RetrievedChunk
 from app.features.chat.domain.repository_interface import RetrieverRepository
 from app.core.qdrant_client import QdrantManager, generate_user_collection_name
-from app.core.embedding_models import embedding_models_manager
+from app.core.embedding_client import embedding_client
 from app.core.logger import get_logger
 from app.shared.exceptions import VectorStoreError
 
@@ -91,33 +91,29 @@ class RetrieverQdrant(RetrieverRepository):
             raise VectorStoreError(f"Retrieval failed: {str(e)}")
     
     async def _generate_dense_embedding(self, text: str) -> List[float]:
-        """Generate dense embedding for the query."""
+        """Generate dense embedding for the query via HTTP service."""
         try:
-            embedder = embedding_models_manager.dense_model
-            embedding = embedder.embed(text)
-            return embedding.tolist() if hasattr(embedding, 'tolist') else list(embedding)
+            embeddings = await embedding_client.get_dense_embeddings([text])
+            return embeddings[0]  # Return the first (and only) embedding
         except Exception as e:
             logger.error(f"Failed to generate dense embedding: {e}")
             raise VectorStoreError(f"Dense embedding generation failed: {str(e)}")
     
     async def _generate_sparse_embedding(self, text: str):
-        """Generate sparse embedding for the query."""
+        """Generate sparse embedding for the query via HTTP service."""
         try:
-            sparse_model = embedding_models_manager.sparse_model
+            # Get sparse embeddings from the service
+            sparse_vectors = await embedding_client.get_sparse_embeddings([text])
             
-            # Generate sparse embedding (returns generator)
-            sparse_embeddings = list(sparse_model.embed([text]))
-            
-            if not sparse_embeddings:
+            if not sparse_vectors:
                 raise VectorStoreError("No sparse embedding generated")
             
-            # Get the first (and only) embedding
-            embedding = sparse_embeddings[0]
+            # Get the first (and only) embedding and convert to dict format
+            sparse_vector = sparse_vectors[0]
             
-            # Return as a simple object with indices and values
             return {
-                'indices': embedding.indices.tolist(),
-                'values': embedding.values.tolist()
+                'indices': sparse_vector.indices,
+                'values': sparse_vector.values
             }
         except Exception as e:
             logger.error(f"Failed to generate sparse embedding: {e}")
