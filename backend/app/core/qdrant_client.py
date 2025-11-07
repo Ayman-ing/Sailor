@@ -19,6 +19,11 @@ class QdrantManager:
             url=settings.qdrant_url,
             api_key=settings.qdrant_api_key,
         )
+        self.collection_name = settings.qdrant_default_collection
+
+    def get_collection_name(self) -> str:
+        """Get the default collection name."""
+        return self.collection_name
     def get_client(self) -> QdrantClient:
         """Get the underlying Qdrant client."""
         return self.client
@@ -175,12 +180,3 @@ class QdrantManager:
 qdrant_manager = QdrantManager()
 
 
-# Helper functions to generate collection names
-def generate_user_collection_name(user_id: str) -> str:
-    """Generate a collection name for all user documents."""
-    return f"chonkie_user_{user_id}_documents"
-
-
-def generate_document_collection_name(user_id: str, document_id: str) -> str:
-    """Generate a collection name for a specific document."""
-    return f"user_{user_id}_doc_{document_id}"

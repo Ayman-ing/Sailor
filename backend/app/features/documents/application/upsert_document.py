@@ -17,7 +17,7 @@ class UpsertDocument:
     async def execute(
         self,
         user_id: str,
-        document_id: str,
+        course_id: str,
         chunks: List[DocumentChunk],
         dense_embeddings: List[List[float]],
         sparse_embeddings: List[SparseVector]
@@ -28,7 +28,7 @@ class UpsertDocument:
         try:
             indexed_ids = await self.embedding_repo.store_chunks(
                 user_id=user_id,
-                document_id=document_id,
+                course_id= course_id,
                 chunks=chunks,
                 dense_embeddings=dense_embeddings,
                 sparse_embeddings=sparse_embeddings

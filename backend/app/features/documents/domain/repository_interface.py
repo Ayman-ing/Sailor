@@ -48,7 +48,7 @@ class EmbeddingRepository(ABC):
     async def store_chunks(
         self, 
         user_id: str,
-        document_id: str,
+        course_id: str,
         chunks: List[DocumentChunk],
         dense_embeddings: List[List[float]],
         sparse_embeddings: List,  # List[SparseVector] - avoiding import here

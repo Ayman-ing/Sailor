@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from app.features.chat.domain.entities import RetrievedChunk
 from app.features.chat.domain.repository_interface import RetrieverRepository
-from app.core.qdrant_client import QdrantManager, generate_user_collection_name
+from app.core.qdrant_client import QdrantManager
 from app.core.embedding_client import embedding_client
 from app.core.logger import get_logger
 from app.shared.exceptions import VectorStoreError
@@ -54,7 +54,7 @@ class RetrieverQdrant(RetrieverRepository):
             sparse_embedding = await self._generate_sparse_embedding(query)
             
             # 2. Search in Qdrant
-            collection_name = generate_user_collection_name(user_id)
+            collection_name = self.qdrant.get_collection_name()
             
             # Check if collection exists
             if not await self.qdrant.collection_exists(collection_name):

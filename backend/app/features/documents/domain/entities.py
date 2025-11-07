@@ -8,7 +8,8 @@ from app.shared.helpers import generate_id, current_timestamp
 
 
 # Default user ID for development (no auth yet)
-DEFAULT_USER_ID = "default_user"
+# Using a special UUID for system/unauthenticated users
+DEFAULT_USER_ID = "00000000-0000-0000-0000-000000000000"
 
 
 @dataclass
@@ -40,17 +41,19 @@ class Document:
     
     id: str = field(default_factory=generate_id)
     user_id: str = DEFAULT_USER_ID
+    course_id: str = ""  # Will be set to UUID string from DB
     filename: str = ""
     file_hash: str = ""
-    file_size_bytes: int = 0
     total_pages: int = 0
-    chunk_count: int = 0
+    storage_path: str = ""
+    file_size: int = 0
+    mime_type: str = ""
     status: str = "pending"  # pending, processing, completed, failed
-    metadata: Optional[DocumentMetadata] = None
+    chunks_count: int = 0
+    error_message: Optional[str] = None
     created_at: datetime = field(default_factory=current_timestamp)
     updated_at: datetime = field(default_factory=current_timestamp)
-    processed_at: Optional[datetime] = None
-    error_message: Optional[str] = None
+    
     
     def mark_as_processing(self) -> None:
         """Mark document as being processed."""
@@ -118,6 +121,7 @@ class DocumentChunk:
     """Represents a chunk of text extracted from a document."""
     
     id: str = field(default_factory=generate_id)
+    course_id: str = ""
     document_id: str = ""
     content: str = ""
     chunk_index: int = 0

@@ -21,7 +21,7 @@ def _to_document_entity(model: DocumentModel) -> Document:
         file_hash=model.file_hash,
         file_size_bytes=model.file_size_bytes,
         total_pages=model.total_pages,
-        chunk_count=model.chunk_count,
+        chunks_count=model.chunks_count,
         status=model.status,
         metadata=metadata,
         created_at=model.created_at,
@@ -61,7 +61,7 @@ class DocumentRepositoryPg(DocumentRepository):
             model.file_hash = document.file_hash
             model.file_size_bytes = document.file_size_bytes
             model.total_pages = document.total_pages
-            model.chunk_count = document.chunk_count
+            model.chunks_count = document.chunks_count
             model.status = document.status
             model.metadata = document.metadata.to_dict() if document.metadata else None
             model.created_at = document.created_at

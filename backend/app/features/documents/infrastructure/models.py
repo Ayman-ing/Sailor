@@ -22,7 +22,7 @@ class DocumentModel(Base):
     metadata = Column(JSON, nullable=True)
     
     # Chunking info
-    chunk_count = Column(Integer, default=0)
+    chunks_count = Column(Integer, default=0)
     chunks_stored_at = Column(DateTime, nullable=True)
     
     created_at = Column(DateTime, default=datetime.utcnow)

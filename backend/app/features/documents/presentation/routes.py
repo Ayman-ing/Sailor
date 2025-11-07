@@ -1,6 +1,7 @@
 """API routes for the documents feature."""
 
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status, Form
+from typing import Optional
 
 from app.features.documents.application.upload_document import UploadDocument
 from app.features.documents.domain.value_objects import FileUpload
@@ -27,10 +28,15 @@ router = APIRouter(
 @router.post("/upload", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
 async def upload_document_endpoint(
     file: UploadFile = File(...),
+    course_id: Optional[str] = Form(None),
     use_case: UploadDocument = Depends(get_upload_use_case)
 ):
     """
     Uploads a document for processing. The file is processed asynchronously.
+    
+    Args:
+        file: The PDF file to upload
+        course_id: Optional course ID to associate the document with
     """
     try:
         # Read file content
@@ -45,7 +51,7 @@ async def upload_document_endpoint(
         
         # Execute the entire pipeline
         # Using a default user ID since we don't have auth yet
-        processed_doc = await use_case.execute(DEFAULT_USER_ID, file_upload)
+        processed_doc = await use_case.execute(DEFAULT_USER_ID, file_upload, course_id)
 
         return processed_doc
 

@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     # Qdrant Vector Database
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: Optional[str] = None
+    qdrant_default_collection: str = "sailor_documents"
     
     # Groq LLM
     groq_api_key: str
@@ -48,10 +49,14 @@ class Settings(BaseSettings):
     # Document Processing
     chunk_size: int = 512
     chunk_overlap: int = 50
+    max_file_size_mb: int = 50  # Maximum upload file size in MB
     
-    # File Storage
-    storage_type: str = "local"  # Options: "local" or "minio"
-    local_storage_path: str = "./storage/documents"
+    # Supabase
+    supabase_url: str
+    supabase_anon_key: str
+    supabase_service_role_key: str
+    supabase_bucket_documents: str = "documents"
+    
     
     class Config:
         env_file = ".env"

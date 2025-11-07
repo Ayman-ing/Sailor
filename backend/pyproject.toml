@@ -19,6 +19,7 @@ dependencies = [
     "python-multipart>=0.0.20",
     "qdrant-client>=1.15.1",
     "sentence-transformers>=5.1.2",
+    "supabase>=2.24.0",
     "uvicorn>=0.38.0",
 ]
 

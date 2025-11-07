@@ -6,7 +6,7 @@ from qdrant_client.http.models import PointStruct, SparseVector
 
 from app.features.documents.domain.entities import DocumentChunk
 from app.features.documents.domain.repository_interface import EmbeddingRepository
-from app.core.qdrant_client import QdrantManager, generate_user_collection_name
+from app.core.qdrant_client import QdrantManager
 from app.core.config import settings
 from app.shared.exceptions import VectorStoreError
 from app.core.logger import get_logger
@@ -25,7 +25,7 @@ class EmbeddingRepositoryQdrant(EmbeddingRepository):
         
     async def create_collection(self, user_id: str, vector_size: int) -> None:
         """Creates a Qdrant collection for the user's document embeddings."""
-        collection_name = generate_user_collection_name(user_id)
+        collection_name = self.qdrant.get_collection_name()
         client = self.qdrant.get_client()
         await self._ensure_collection_exists(client, collection_name, vector_size)
         
@@ -54,6 +54,16 @@ class EmbeddingRepositoryQdrant(EmbeddingRepository):
             logger.info(f"Creating payload indexes for collection '{collection_name}'...")
             client.create_payload_index(
                 collection_name=collection_name,
+                    field_name="user_id",
+                field_schema=models.PayloadSchemaType.KEYWORD
+            )
+            client.create_payload_index(
+                collection_name=collection_name,
+                    field_name="course_id",
+                field_schema=models.PayloadSchemaType.KEYWORD
+            )
+            client.create_payload_index(
+                collection_name=collection_name,
                 field_name="document_id",
                 field_schema=models.PayloadSchemaType.KEYWORD
             )
@@ -73,7 +83,7 @@ class EmbeddingRepositoryQdrant(EmbeddingRepository):
     async def store_chunks(
         self,
         user_id: str,
-        document_id: str,
+        course_id: str,
         chunks: List[DocumentChunk],
         dense_embeddings: List[List[float]],
         sparse_embeddings: List[SparseVector],
@@ -93,11 +103,11 @@ class EmbeddingRepositoryQdrant(EmbeddingRepository):
         Returns:
             List of chunk IDs that were stored
         """
+        collection_name = self.qdrant.get_collection_name()
         # Use configurable batch size from settings if not provided
         if batch_size is None:
             batch_size = settings.embedding_batch_size
             
-        collection_name = generate_user_collection_name(user_id)
         client = self.qdrant.get_client()
         
         # Ensure collection exists with correct vector size
@@ -135,6 +145,8 @@ class EmbeddingRepositoryQdrant(EmbeddingRepository):
                     chunk_ids.append(point_id)
                     
                     payload = {
+                        "user_id": user_id,
+                        "course_id": course_id,
                         "document_id": chunk.document_id,
                         "content": chunk.content,
                         "chunk_index": chunk.chunk_index,
@@ -175,7 +187,7 @@ class EmbeddingRepositoryQdrant(EmbeddingRepository):
             raise VectorStoreError(f"Could not store chunks in Qdrant: {str(e)}")
 
     async def delete_document_chunks(self, user_id: str, document_id: str) -> None:
-        collection_name = generate_user_collection_name(user_id)
+        collection_name = self.qdrant.get_collection_name()
         
         if not self.qdrant.get_client().collection_exists(collection_name):
             logger.warning(f"Attempted to delete chunks from non-existent collection: {collection_name}")
@@ -221,7 +233,7 @@ class EmbeddingRepositoryQdrant(EmbeddingRepository):
         Returns:
             List of search results with scores
         """
-        collection_name = generate_user_collection_name(user_id)
+        collection_name = self.qdrant.get_collection_name()
         
         if not self.qdrant.get_client().collection_exists(collection_name):
             logger.warning(f"Attempted to search in non-existent collection: {collection_name}")
