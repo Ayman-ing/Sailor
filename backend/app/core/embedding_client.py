@@ -56,33 +56,45 @@ class EmbeddingClient:
         raise Exception(f"Failed to connect to {service_name} after {self.max_retries} attempts: {str(last_error)}")
     
     async def get_dense_embeddings(self, texts: List[str]) -> List[List[float]]:
+        """Get dense embeddings with order preservation via indexed requests."""
         async def request():
+            indexed_texts = [{"index": i, "text": text} for i, text in enumerate(texts)]
             response = await self._client.post(
                 f"{self.dense_url}/embed",
-                json={"texts": texts}
-            )
-            response.raise_for_status()
-            data = response.json()
-            return data["embeddings"]
-        
-        return await self._retry_request(request, "Dense embedding service")
-    
-    async def get_sparse_embeddings(self, texts: List[str]) -> List[SparseVector]:
-        async def request():
-            response = await self._client.post(
-                f"{self.sparse_url}/embed",
-                json={"texts": texts}
+                json={"texts": indexed_texts}
             )
             response.raise_for_status()
             data = response.json()
             
-            return [
-                SparseVector(
-                    indices=emb["indices"],
-                    values=emb["values"]
-                )
+            # Extract and re-sort by index to preserve order
+            embeddings_with_index = [
+                (emb["index"], emb["embedding"]) for emb in data["embeddings"]
+            ]
+            embeddings_with_index.sort(key=lambda x: x[0])
+            
+            return [emb for _, emb in embeddings_with_index]
+        
+        return await self._retry_request(request, "Dense embedding service")
+    
+    async def get_sparse_embeddings(self, texts: List[str]) -> List[SparseVector]:
+        """Get sparse embeddings with order preservation via indexed requests."""
+        async def request():
+            indexed_texts = [{"index": i, "text": text} for i, text in enumerate(texts)]
+            response = await self._client.post(
+                f"{self.sparse_url}/embed",
+                json={"texts": indexed_texts}
+            )
+            response.raise_for_status()
+            data = response.json()
+            
+            # Extract and re-sort by index to preserve order
+            embeddings_with_index = [
+                (emb["index"], SparseVector(indices=emb["indices"], values=emb["values"]))
                 for emb in data["embeddings"]
             ]
+            embeddings_with_index.sort(key=lambda x: x[0])
+            
+            return [emb for _, emb in embeddings_with_index]
         
         return await self._retry_request(request, "Sparse embedding service")
     

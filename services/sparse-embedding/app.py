@@ -2,7 +2,7 @@
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Union
 import uvicorn
 from fastembed import SparseTextEmbedding
 import asyncio
@@ -53,21 +53,37 @@ class SparseVector(BaseModel):
     values: List[float]
 
 
+class IndexedText(BaseModel):
+    """Text with index for order preservation."""
+    index: int
+    text: str
+
+
 class EmbedRequest(BaseModel):
     """Request model for embedding generation."""
-    texts: List[str] = Field(..., max_length=MAX_BATCH_SIZE)
+    texts: Union[List[str], List[IndexedText]] = Field(..., max_length=MAX_BATCH_SIZE)
     
     class Config:
         json_schema_extra = {
             "example": {
-                "texts": ["Hello world", "How are you?"]
+                "texts": [
+                    {"index": 0, "text": "Hello world"},
+                    {"index": 1, "text": "How are you?"}
+                ]
             }
         }
 
 
+class IndexedSparseEmbedding(BaseModel):
+    """Sparse embedding with index for order preservation."""
+    index: int
+    indices: List[int]
+    values: List[float]
+
+
 class EmbedResponse(BaseModel):
     """Response model containing sparse embeddings."""
-    embeddings: List[SparseVector]
+    embeddings: List[IndexedSparseEmbedding]
     model: str
 
 
@@ -87,13 +103,16 @@ async def embed_texts(request: EmbedRequest):
         raise HTTPException(status_code=503, detail="Model not loaded yet")
     
     try:
+        indexed_texts = [(item.index, item.text) for item in request.texts]
+        texts_only = [text for _, text in indexed_texts]
+        
         loop = asyncio.get_event_loop()
         sparse_vectors = []
         
-        num_batches = (len(request.texts) + INTERNAL_BATCH_SIZE - 1) // INTERNAL_BATCH_SIZE
+        num_batches = (len(texts_only) + INTERNAL_BATCH_SIZE - 1) // INTERNAL_BATCH_SIZE
         
-        for i in range(0, len(request.texts), INTERNAL_BATCH_SIZE):
-            batch = request.texts[i:i + INTERNAL_BATCH_SIZE]
+        for i in range(0, len(texts_only), INTERNAL_BATCH_SIZE):
+            batch = texts_only[i:i + INTERNAL_BATCH_SIZE]
             batch_num = i // INTERNAL_BATCH_SIZE + 1
             
             logger.debug(f"Processing sparse embedding batch {batch_num}/{num_batches} ({len(batch)} texts)")
@@ -103,13 +122,14 @@ async def embed_texts(request: EmbedRequest):
                 lambda b=batch: list(model.embed(b))
             )
             
-            for embedding in batch_embeddings:
-                sparse_vectors.append(
-                    SparseVector(
-                        indices=embedding.indices.tolist(),
-                        values=embedding.values.tolist()
-                    )
-                )
+            # Always return indexed format - get corresponding indices for this batch
+            batch_indices = [idx for idx, _ in indexed_texts[i:i + INTERNAL_BATCH_SIZE]]
+            for idx, embedding in zip(batch_indices, batch_embeddings):
+                sparse_vectors.append(IndexedSparseEmbedding(
+                    index=idx,
+                    indices=embedding.indices.tolist(),
+                    values=embedding.values.tolist()
+                ))
         
         logger.info(f"Generated {len(sparse_vectors)} sparse embeddings")
         return EmbedResponse(

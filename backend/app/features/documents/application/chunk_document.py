@@ -10,6 +10,10 @@ from app.core.logger import get_logger
 
 logger = get_logger(__name__)
 
+# Chunk size multipliers for different content types
+CODE_CHUNK_SIZE_MULTIPLIER = 10
+TABLE_CHUNK_SIZE_MULTIPLIER = 10
+
 
 class ChunkDocument:
 
@@ -79,7 +83,7 @@ class ChunkDocument:
         return chunks
 
     async def _chunk_code(self, document_id: str, code_block) -> List[DocumentChunk]:
-        chunker = CodeChunker(chunk_size=self.config.chunk_size)
+        chunker = CodeChunker(chunk_size=self.config.chunk_size * CODE_CHUNK_SIZE_MULTIPLIER)
         content = code_block.content if hasattr(code_block, 'content') else str(code_block)
         
         if not content.strip():
@@ -115,7 +119,7 @@ Code:
         return chunks
 
     async def _chunk_table(self, document_id: str, table) -> List[DocumentChunk]:
-        chunker = TableChunker(chunk_size=self.config.chunk_size)
+        chunker = TableChunker(chunk_size=self.config.chunk_size * TABLE_CHUNK_SIZE_MULTIPLIER)
         content = table.content if hasattr(table, 'content') else str(table)
         
         if not content.strip():

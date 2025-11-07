@@ -2,7 +2,7 @@
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Union
 import uvicorn
 from sentence_transformers import SentenceTransformer
 import asyncio
@@ -68,21 +68,36 @@ app = FastAPI(
 )
 
 
+class IndexedText(BaseModel):
+    """Text with index for order preservation."""
+    index: int
+    text: str
+
+
 class EmbedRequest(BaseModel):
     """Request model for embedding generation."""
-    texts: List[str] = Field(..., max_length=MAX_BATCH_SIZE)
+    texts: Union[List[str], List[IndexedText]] = Field(..., max_length=MAX_BATCH_SIZE)
     
     class Config:
         json_schema_extra = {
             "example": {
-                "texts": ["Hello world", "How are you?"]
+                "texts": [
+                    {"index": 0, "text": "Hello world"},
+                    {"index": 1, "text": "How are you?"}
+                ]
             }
         }
 
 
+class IndexedEmbedding(BaseModel):
+    """Embedding with index for order preservation."""
+    index: int
+    embedding: List[float]
+
+
 class EmbedResponse(BaseModel):
     """Response model containing embeddings."""
-    embeddings: List[List[float]]
+    embeddings: List[IndexedEmbedding]
     model: str
     dimension: int
 
@@ -103,11 +118,14 @@ async def embed_texts(request: EmbedRequest):
         raise HTTPException(status_code=503, detail="Model not loaded yet")
     
     try:
+        indexed_texts = [(item.index, item.text) for item in request.texts]
+        texts_only = [text for _, text in indexed_texts]
+        
         loop = asyncio.get_event_loop()
         embeddings = await loop.run_in_executor(
             executor,
             lambda: model.encode(
-                request.texts,
+                texts_only,
                 convert_to_numpy=True,
                 show_progress_bar=False,
                 batch_size=INTERNAL_BATCH_SIZE
@@ -116,8 +134,13 @@ async def embed_texts(request: EmbedRequest):
         
         logger.info(f"Generated {len(embeddings)} dense embeddings")
         
+        # Always return indexed embeddings
+        indexed_embeddings = [
+            IndexedEmbedding(index=idx, embedding=emb.tolist())
+            for (idx, _), emb in zip(indexed_texts, embeddings)
+        ]
         return EmbedResponse(
-            embeddings=embeddings.tolist(),
+            embeddings=indexed_embeddings,
             model=MODEL_NAME,
             dimension=model.get_sentence_embedding_dimension()
         )
