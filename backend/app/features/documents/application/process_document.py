@@ -5,7 +5,7 @@ from typing import Tuple, List
 from contextlib import ExitStack
 from pathlib import Path
 
-from chonkie import MarkdownDocument, MarkdownChef
+from chonkie import MarkdownDocument, Pipeline
 import pymupdf4llm
 import fitz
 from app.features.documents.domain.value_objects import FileUpload
@@ -19,8 +19,11 @@ class ProcessDocument:
     
     def __init__(self, tokenizer: str = "gpt2"):
         self.tokenizer = tokenizer
-        self.chef = MarkdownChef(tokenizer=self.tokenizer)
-    
+        self.pipeline = (
+            Pipeline()
+            .process_with("markdown")
+            .chunk_with("recursive", tokenizer=self.tokenizer)
+        )
 
 
     
@@ -85,43 +88,40 @@ class ProcessDocument:
                 os.unlink(tmp_pdf_path)
     
     async def _process_pages_batch(
-        self, page_chunks: List[Tuple[int, str]]
-    ) -> List[Tuple[MarkdownDocument, int]]:
+        self, 
+        page_chunks: List[Tuple[int, str]]
+    ) -> List[Tuple[any, int]]:
+        """Process markdown strings directly - NO temp files needed! 🎉"""
         if not page_chunks:
             return []
         
-        with ExitStack() as stack:
-            temp_files = []
+        try:
+            logger.info(f"Processing {len(page_chunks)} pages directly from strings")
             
-            for page_num, page_content in page_chunks:
-                temp_file = stack.enter_context(tempfile.NamedTemporaryFile(
-                    mode="w",
-                    suffix=".md",
-                    delete=False,
-                    encoding="utf-8"
-                ))
-                temp_file.write(page_content)
-                temp_file.flush()
-                temp_files.append((Path(temp_file.name), page_num))
-            
-            try:
-                file_paths = [path for path, _ in temp_files]
-                
-                processed_docs = await asyncio.to_thread(
-                    self.chef.process_batch,
-                    file_paths
+            # Process each page's markdown content directly
+            async def process_single_page(page_num: int, markdown_content: str):
+                # Process the markdown string directly with the pipeline!
+                doc = await asyncio.to_thread(
+                    self.pipeline.run,
+                    texts=markdown_content  # Pass string directly!
                 )
-                
-                page_documents = [
-                    (doc, page_num) 
-                    for doc, (_, page_num) in zip(processed_docs, temp_files)
-                ]
-                
-                return page_documents
-                
-            finally:
-                for path, page_num in temp_files:
-                    try:
-                        path.unlink()
-                    except Exception as e:
-                        logger.warning(f"Failed to delete temp file {path}: {e}")
+                return (doc, page_num)
+            
+            # Process all pages in parallel
+            tasks = [
+                process_single_page(page_num, content) 
+                for page_num, content in page_chunks
+            ]
+            
+            page_documents = await asyncio.gather(*tasks)
+            
+            logger.info(f"Successfully processed {len(page_documents)} pages ")
+            
+            return page_documents
+            
+        except Exception as e:
+            logger.error(f"Direct string processing failed: {e}")
+            raise DocumentProcessingError(
+                document_id="unknown",
+                reason=f"String processing failed: {str(e)}"
+            )
