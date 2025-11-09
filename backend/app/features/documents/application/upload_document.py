@@ -90,64 +90,33 @@ class UploadDocument:
                 logger.error(f"Batch {batch_start}-{batch_end} FAILED - {len(page_batch)} pages SKIPPED: {e}")
                 return ([], [], [])
 
-    async def execute(self, user_id: str, file_upload: FileUpload, course_id: str | None = None) -> Document:
-        """Execute the document upload and processing pipeline.
+    async def _process_document_pipeline(
+        self,
+        doc: Document,
+        file_upload: FileUpload,
+        user_id: str,
+        course_id: str
+    ) -> None:
+        """Background processing pipeline for document ingestion.
+        
+        This runs asynchronously after the initial upload is complete.
+        Updates the document status in the database as it progresses.
         
         Args:
-            user_id: ID of the user uploading the document
+            doc: Document entity to process
             file_upload: FileUpload object containing file data
-            course_id: Optional course ID to associate with document
-            
-        Returns:
-            Processed Document entity
-            
-        Raises:
-            Exception: If document already exists or processing fails
+            user_id: User ID
+            course_id: Course ID
         """
-        doc_id = str(uuid.uuid4())
-        course_id = course_id or "11111111-1111-1111-1111-111111111111"
-        
-        # Initialize document object for error handling
-        doc = None
-        
         try:
-            logger.info(f"Processing {file_upload.filename}")
+            logger.info(f"Starting background processing for document {doc.id}")
             
-            # Check if document with same hash already exists for user
-            file_hash = await self._compute_file_hash(file_upload.content)
-            existing_doc = await self.document_repo.get_by_hash(user_id, file_hash)
-            if existing_doc:
-                raise Exception(f"Document with the same content already exists (ID: {existing_doc.id})")
-
-            # Build storage path
-            storage_path = f"{user_id}/{course_id}/{doc_id}_{file_upload.filename}"
-            
-            # Upload file to Supabase Storage
-            logger.info(f"Uploading to Supabase Storage: {storage_path}")
-            await self.storage_repo.upload_file(storage_path, file_upload)
-            logger.info(f"File uploaded successfully to {storage_path}")
-
             # Process document (extract pages)
             page_documents, total_pages, _ = await self.process.execute(file_upload)
-
-            # Save initial document metadata to PostgreSQL
-            doc = Document(
-                id=doc_id,
-                user_id=user_id,
-                course_id=course_id,
-                filename=file_upload.filename,
-                storage_path=storage_path,
-                file_hash=file_hash,
-                file_size=len(file_upload.content),
-                total_pages=total_pages,
-                chunks_count=0,
-                status="processing",
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
-                error_message=None,
-            )
-            await self.document_repo.save(doc)
-            logger.info(f"Document metadata saved to database: {doc.id}")
+            
+            # Update total pages count
+            doc.total_pages = total_pages
+            await self.document_repo.update(doc)
             
             # Split pages into batches
             page_batches = [
@@ -161,10 +130,10 @@ class UploadDocument:
             semaphore = asyncio.Semaphore(settings.max_parallel_pages)
             
             # Create tasks for parallel processing
-            tasks = []
-            for batch in page_batches:
-                task = self._chunk_and_embed_batch(batch, doc.id, semaphore)
-                tasks.append(task)
+            tasks = [
+                self._chunk_and_embed_batch(batch, doc.id, semaphore)
+                for batch in page_batches
+            ]
             
             # Wait for all batches to complete
             all_results = await asyncio.gather(*tasks)
@@ -199,25 +168,102 @@ class UploadDocument:
             # Update document with final counts and status
             doc.chunks_count = indexed_count
             doc.status = "completed"
+            doc.processed_at = datetime.utcnow()
             doc.updated_at = datetime.utcnow()
             
             await self.document_repo.update(doc)
             
-            logger.info(f"Completed: {indexed_count} chunks from {total_pages} pages")
+            logger.info(f"✅ Document {doc.id} completed: {indexed_count} chunks from {total_pages} pages")
             
+        except Exception as e:
+            logger.error(f"❌ Background processing failed for document {doc.id}: {e}")
+            
+            # Update document status to failed
+            try:
+                doc.status = "failed"
+                doc.error_message = str(e)
+                doc.updated_at = datetime.utcnow()
+                await self.document_repo.update(doc)
+            except Exception as db_error:
+                logger.error(f"Failed to update document status: {db_error}")
+
+    async def execute(self, user_id: str, file_upload: FileUpload, course_id: str | None = None) -> Document:
+        """Execute the document upload - ATOMIC operation.
+        
+        This method performs the atomic upload (file + DB row creation) and returns immediately.
+        The processing pipeline runs asynchronously in the background.
+        
+        Args:
+            user_id: ID of the user uploading the document
+            file_upload: FileUpload object containing file data
+            course_id: Optional course ID to associate with document
+            
+        Returns:
+            Document entity with "processing" status
+            
+        Raises:
+            Exception: If document already exists or atomic upload fails
+        """
+        doc_id = str(uuid.uuid4())
+        course_id = course_id or "11111111-1111-1111-1111-111111111111"
+        storage_path = f"{user_id}/{course_id}/{doc_id}_{file_upload.filename}"
+        
+        try:
+            logger.info(f"📤 Uploading {file_upload.filename}")
+            
+            # 1. Check if document with same hash already exists
+            file_hash = await self._compute_file_hash(file_upload.content)
+            existing_doc = await self.document_repo.get_by_hash(user_id, file_hash)
+            if existing_doc:
+                raise Exception(f"Document with the same content already exists (ID: {existing_doc.id})")
+
+            # 2. ATOMIC OPERATION: Upload file + Create DB row
+            # If either fails, the whole operation fails
+            try:
+                # Upload file to storage
+                logger.info(f"Uploading to storage: {storage_path}")
+                await self.storage_repo.upload_file(storage_path, file_upload)
+                
+                # Create document record in database
+                doc = Document(
+                    id=doc_id,
+                    user_id=user_id,
+                    course_id=course_id,
+                    filename=file_upload.filename,
+                    storage_path=storage_path,
+                    file_hash=file_hash,
+                    file_size=len(file_upload.content),
+                    total_pages=0,  # Will be updated during processing
+                    chunks_count=0,
+                    status="processing",
+                    created_at=datetime.utcnow(),
+                    updated_at=datetime.utcnow(),
+                    error_message=None,
+                )
+                await self.document_repo.save(doc)
+                
+                logger.info(f"✅ Document uploaded successfully: {doc.id}")
+                
+            except Exception as atomic_error:
+                # Rollback: If DB save fails, delete the uploaded file
+                logger.error(f"Atomic operation failed, rolling back: {atomic_error}")
+                try:
+                    await self.storage_repo.delete_file(storage_path)
+                    logger.info(f"Rollback: Deleted file from storage")
+                except Exception as cleanup_error:
+                    logger.error(f"Failed to cleanup file during rollback: {cleanup_error}")
+                raise atomic_error
+            
+            # 3. Start background processing (fire and forget)
+            asyncio.create_task(
+                self._process_document_pipeline(doc, file_upload, user_id, course_id)
+            )
+            
+            logger.info(f"🔄 Background processing started for document {doc.id}")
+            
+            # Return immediately with "processing" status
             return doc
 
         except Exception as e:
-            logger.error(f"Upload failed: {e}")
-            
-            # Update document status to failed if doc was created
-            if doc:
-                try:
-                    doc.status = "failed"
-                    doc.error_message = str(e)
-                    doc.updated_at = datetime.utcnow()
-                    await self.document_repo.update(doc)
-                except Exception as db_error:
-                    logger.error(f"Failed to update document status: {db_error}")
-            
+            logger.error(f"❌ Upload failed: {e}")
             raise
