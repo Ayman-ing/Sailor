@@ -22,10 +22,15 @@ class SupabaseClient:
             logger.info("Initializing Supabase client")
             cls._instance = create_client(
                 supabase_url=settings.supabase_url,
-                supabase_key=settings.supabase_service_role_key  # Use service role for backend
+                supabase_key=settings.supabase_service_role_key
             )
             logger.info("Supabase client initialized successfully")
         return cls._instance
+    
+    @classmethod
+    def reset_client(cls) -> None:
+        """Reset the singleton instance (useful for testing)."""
+        cls._instance = None
 
 
 # Global instance getter

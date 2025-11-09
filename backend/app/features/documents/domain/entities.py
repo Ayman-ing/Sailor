@@ -65,7 +65,6 @@ class Document:
         self.status = "completed"
         self.total_pages = total_pages
         self.metadata = metadata
-        self.processed_at = current_timestamp()
         self.updated_at = current_timestamp()
     
     def mark_as_failed(self, error_message: str) -> None:
@@ -92,28 +91,6 @@ class Document:
             raise ValidationError("file_size_bytes must be positive")
 
 
-@dataclass
-class DocumentMarkdown:
-    """Markdown representation of extracted document content."""
-    
-    document_id: str
-    content: str  # Full markdown content
-    extracted_at: datetime = field(default_factory=current_timestamp)
-    
-    def validate(self) -> None:
-        """Validate markdown data."""
-        from app.shared.exceptions import ValidationError
-        
-        if not self.document_id:
-            raise ValidationError("document_id is required")
-        if not self.content:
-            raise ValidationError("content is required")
-    
-    def get_preview(self, max_chars: int = 500) -> str:
-        """Get a preview of the markdown content."""
-        if len(self.content) <= max_chars:
-            return self.content
-        return self.content[:max_chars] + "..."
 
 
 @dataclass

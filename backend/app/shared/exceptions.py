@@ -115,7 +115,9 @@ class ChunkingError(DocumentError):
 class StorageError(InfrastructureException):
     """Base exception for storage-related errors."""
     pass
-
+class RepositoryError(StorageError):
+    """Raised when repository operations fail."""
+    pass
 
 class FileNotFoundError(StorageError):
     """Raised when a file is not found in storage."""

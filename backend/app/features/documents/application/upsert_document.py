@@ -4,7 +4,6 @@ from app.features.documents.domain.entities import DocumentChunk
 from app.features.documents.domain.repository_interface import EmbeddingRepository
 from app.shared.exceptions import VectorStoreError
 from app.core.logger import get_logger
-from qdrant_client.models import SparseVector
 
 logger = get_logger(__name__)
 
@@ -20,7 +19,7 @@ class UpsertDocument:
         course_id: str,
         chunks: List[DocumentChunk],
         dense_embeddings: List[List[float]],
-        sparse_embeddings: List[SparseVector]
+        sparse_embeddings: List[List[float]]
     ) -> int:
         if not chunks:
             return 0

@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from typing import List, Optional
 
 from app.features.documents.domain.entities import Document, DocumentChunk
-from app.features.documents.domain.value_objects import DocumentFilter
+from app.features.documents.domain.value_objects import DocumentFilter, FileUpload
 
 
 class DocumentRepository(ABC):
@@ -14,6 +14,10 @@ class DocumentRepository(ABC):
     async def save(self, document: Document) -> Document:
         """Save a document (create or update)."""
         pass
+    @abstractmethod
+    async def update(self, document: Document) -> Document:
+        """Update an existing document."""
+        pass
     
     @abstractmethod
     async def get_by_id(self, document_id: str) -> Optional[Document]:
@@ -21,7 +25,7 @@ class DocumentRepository(ABC):
         pass
     
     @abstractmethod
-    async def get_by_hash(self, file_hash: str, user_id: str) -> Optional[Document]:
+    async def get_by_hash(self, user_id: str, file_hash: str) -> Optional[Document]:
         """Get document by file hash for a specific user."""
         pass
     
@@ -31,10 +35,30 @@ class DocumentRepository(ABC):
         pass
     
     @abstractmethod
-    async def list_by_filter(self, filter: DocumentFilter) -> List[Document]:
-        """List documents matching filter criteria."""
+    async def get_all_by_user(self, user_id: str) -> List[Document]:
+        """List documents for a specific user."""
         pass
-
+    @abstractmethod
+    async def get_all_by_user_and_course(self, user_id: str, course_id: str) -> List[Document]:
+        """List documents for a specific user and course."""
+        pass
+class StorageRepository(ABC):
+    """Interface for document file storage."""
+    
+    @abstractmethod
+    async def upload_file(self, file_path: str, file: FileUpload) -> str:
+        """Upload a file and return its storage URL."""
+        pass
+    
+    @abstractmethod
+    async def delete_file(self, file_url: str) -> None:
+        """Delete a file from storage."""
+        pass
+    
+    @abstractmethod
+    async def get_file(self, file_url: str) -> bytes:
+        """Retrieve a file's content from storage."""
+        pass
 
 class EmbeddingRepository(ABC):
     """Interface for vector embeddings storage with hybrid search support."""
