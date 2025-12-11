@@ -1,4 +1,4 @@
-# 🧭 Sailor - AI-Powered Study Assistant
+just had# 🧭 Sailor - AI-Powered Study Assistant
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)](https://fastapi.tiangolo.com/)
@@ -235,7 +235,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📧 Contact
 
-Project Link: [https://github.com/yourusername/Sailor](https://github.com/yourusername/Sailor)
+Project Link: [https://github.com/Ayman-ing/Sailor](https://github.com/Ayman-ing/Sailor)
 
 ---
 
